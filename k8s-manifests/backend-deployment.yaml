@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: backend
+  labels:
+    app: api-server
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-server
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+      serviceAccountName: api-server-sa
+      containers:
+        - name: api-server
+          image: ghcr.io/example/api-server:v2.1.0
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: host
+          securityContext:
+            # PSS Restricted violation: runAsNonRoot not set to true — container may run as root
+            runAsNonRoot: false
+            # PSS Restricted violation: seccompProfile omitted — must be RuntimeDefault or Localhost under restricted
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-server-sa
+  namespace: backend
+automountServiceAccountToken: false

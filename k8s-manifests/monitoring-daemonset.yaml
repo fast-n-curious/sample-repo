@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-metrics-collector
+  namespace: backend
+  labels:
+    app: node-metrics-collector
+    tier: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: node-metrics-collector
+  template:
+    metadata:
+      labels:
+        app: node-metrics-collector
+    spec:
+      containers:
+        - name: collector
+          image: prom/node-exporter:v1.7.0
+          ports:
+            - name: metrics
+              containerPort: 9100
+              # PSS Baseline violation: hostPort binds directly to the node's network port
+              hostPort: 9100
+              protocol: TCP
+          securityContext:
+            # PSS Restricted violation: capabilities not dropped — ALL must be dropped under restricted
+            capabilities:
+              add:
+                - SYS_PTRACE
+            # PSS Restricted violation: seccompProfile not set — must be RuntimeDefault or Localhost
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "webapp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webapp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "webapp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "webapp.selectorLabels" . | nindent 8 }}
+    spec:
+      # PSS Baseline violation: hostNetwork grants the pod direct access to the node's network namespace
+      hostNetwork: {{ .Values.security.hostNetwork }}
+      serviceAccountName: {{ include "webapp.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          securityContext:
+            # PSS Baseline violation: privileged mode gives root-equivalent access to the node
+            privileged: {{ .Values.security.privileged }}
+            # PSS Restricted violation: allowPrivilegeEscalation allows gaining more privileges than parent process
+            allowPrivilegeEscalation: {{ .Values.security.allowPrivilegeEscalation }}
+            capabilities:
+              # PSS Baseline violation: NET_ADMIN allows network configuration changes on the host
+              add:
+                {{- toYaml .Values.security.addCapabilities | nindent 16 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ include "webapp.fullname" . }}-config
